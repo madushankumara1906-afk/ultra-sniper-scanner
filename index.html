@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1020"><meta name="description" content="Crypto-only market scanner for Binance Spot and USDT-M Futures">
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icons/icon-192.png">
+<title>ULTRA SNIPER SCANNER</title>
+<style>
+:root{color-scheme:dark;--bg:#090e1b;--panel:#111a2d;--line:#263550;--text:#eaf0ff;--muted:#9aa9c4;--green:#35d49a;--red:#ff647c;--gold:#f2c66d}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(150deg,#0b1020,#071421);color:var(--text);font:15px system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:22px 16px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#0b1020ee;backdrop-filter:blur(12px);z-index:2}
+.brand{font-weight:900;letter-spacing:1.2px;font-size:20px}.sub{color:var(--muted);font-size:12px;margin-top:5px}
+main{padding:14px;max-width:900px;margin:auto}.tabs{display:flex;gap:8px;margin-bottom:12px}.tab,button,select{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);padding:11px 13px;font:inherit}.tab{flex:1}.tab.active{border-color:#4b8cff;background:#142a4c}.controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.controls button{background:#18375b;border-color:#315c8d;font-weight:700}.status{color:var(--muted);font-size:12px;margin:10px 2px}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.metric{background:var(--panel);border:1px solid var(--line);padding:12px;border-radius:12px}.metric b{display:block;font-size:20px}.metric span{color:var(--muted);font-size:11px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px;margin:9px 0}.top{display:flex;justify-content:space-between;gap:10px;align-items:center}.coin{font-weight:800;font-size:16px}.price{color:var(--muted);font-size:12px;margin-top:4px;overflow-wrap:anywhere}.signal{font-size:12px;font-weight:900;border-radius:7px;padding:6px 8px;white-space:nowrap}.BUY{color:var(--green);background:#123b32}.SELL{color:var(--red);background:#451c2b}.WAIT{color:var(--gold);background:#40351c}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.chip{border:1px solid var(--line);color:#c2cee4;border-radius:99px;padding:4px 7px;font-size:11px}.reason{font-size:12px;color:var(--muted);margin-top:9px;line-height:1.5}.error{color:var(--red)}.foot{color:var(--muted);font-size:11px;line-height:1.5;margin:20px 2px}.hide{display:none}a{color:#8cb9ff}
+</style></head>
+<body>
+<header><div class="brand">⚡ ULTRA SNIPER SCANNER</div><div class="sub">CRYPTO ONLY · 1H · SMC + MSNR + ELLIOTT + CANDLE PATTERNS</div></header>
+<main>
+<div class="tabs"><button class="tab active" id="spotTab" onclick="setMarket('spot')">BINANCE SPOT</button><button class="tab" id="futTab" onclick="setMarket('futures')">USDT-M FUTURES</button></div>
+<div class="controls"><select id="tf"><option value="1h">1 Hour</option><option value="4h">4 Hours</option><option value="15m">15 Minutes</option></select><button id="scanBtn" onclick="scan()">⟳ Scan Market</button></div>
+<div class="status" id="status">Ready. Tap Scan Market to fetch public Binance candles.</div>
+<div class="summary"><div class="metric"><b id="scanned">0</b><span>PAIRS SCANNED</span></div><div class="metric"><b id="buys">0</b><span>BUY SETUPS</span></div><div class="metric"><b id="sells">0</b><span>SELL SETUPS</span></div></div>
+<div id="results"></div>
+<div class="foot">Prototype only — technical rules are simplified heuristics, not guaranteed signals. Elliott Wave counts are not reliably automated by this version. No orders are placed. Use closed candles, verify charts, and paper-test before risking money. Binance public market data only; no API key, account connection, or private credentials are needed.</div>
+</main>
+<script>
+const pairs=['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT','DOGEUSDT','LINKUSDT','AVAXUSDT','LTCUSDT'];
+let market='spot';
+function setMarket(m){market=m;document.getElementById('spotTab').classList.toggle('active',m==='spot');document.getElementById('futTab').classList.toggle('active',m==='futures');scan()}
+const $=id=>document.getElementById(id);
+const fmt=n=>n>=1000?n.toLocaleString('en-US',{maximumFractionDigits:2}):n>=1?n.toFixed(4):n.toPrecision(5);
+async function candles(symbol){
+ const tf=$('tf').value, base=market==='spot'?'https://data-api.binance.vision/api/v3/klines':'https://fapi.binance.com/fapi/v1/klines';
+ const url=base+'?symbol='+symbol+'&interval='+tf+'&limit=100';
+ const r=await fetch(url);if(!r.ok)throw new Error('HTTP '+r.status);const raw=await r.json();
+ return raw.slice(0,-1).map(k=>({t:+k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]}));
+}
+function analyze(d){
+ if(d.length<35)throw new Error('Not enough candles');
+ const last=d[d.length-1], prev=d[d.length-2], recent=d.slice(-21,-1);
+ const hi=Math.max(...recent.map(x=>x.h)),lo=Math.min(...recent.map(x=>x.l));
+ const range=Math.max(hi-lo,1e-12), mid=lo+range*.5, deepLo=hi-range*.764,deepHi=hi-range*.618;
+ const bullBOS=last.c>hi,bearBOS=last.c<lo;
+ const bullSweep=last.l<Math.min(...d.slice(-8,-1).map(x=>x.l))&&last.c>last.o;
+ const bearSweep=last.h>Math.max(...d.slice(-8,-1).map(x=>x.h))&&last.c<last.o;
+ const bullEngulf=last.c>last.o&&prev.c<prev.o&&last.c>=prev.o&&last.o<=prev.c;
+ const bearEngulf=last.c<last.o&&prev.c>prev.o&&last.c<=prev.o&&last.o>=prev.c;
+ const inFib=last.c>=deepLo&&last.c<=deepHi;
+ // Simplified MSNR proxy: proximity to recent range boundaries; not a canonical MSNR calculation.
+ const nearSupport=(last.c-lo)/range<.12,nearResistance=(hi-last.c)/range<.12;
+ let bull=0,bear=0,why=[];
+ if(bullBOS){bull+=2;why.push('Bullish BOS')}
+ if(bearBOS){bear+=2;why.push('Bearish BOS')}
+ if(bullSweep){bull+=2;why.push('Sell-side liquidity sweep')}
+ if(bearSweep){bear+=2;why.push('Buy-side liquidity sweep')}
+ if(bullEngulf){bull++;why.push('Bullish engulfing')}
+ if(bearEngulf){bear++;why.push('Bearish engulfing')}
+ if(inFib){if(last.c>=mid){bull++;why.push('Fib deep-zone proximity')}else{bear++;why.push('Fib deep-zone proximity')}}
+ if(nearSupport){bull++;why.push('Range support proximity')}
+ if(nearResistance){bear++;why.push('Range resistance proximity')}
+ // Swing-pivot context is intentionally labelled heuristic, not a confirmed Elliott count.
+ const piv=d.slice(-12);const ups=piv.filter((x,i)=>i>0&&x.h>piv[i-1].h).length;
+ const dns=piv.filter((x,i)=>i>0&&x.l<piv[i-1].l).length;
+ let sig='WAIT';if(bull>=3&&bull>bear)sig='BUY';if(bear>=3&&bear>bull)sig='SELL';
+ return {sig,score:Math.max(bull,bear),bull,bear,last,why:why.length?why:['No strong confluence'],hi,lo,trend:ups>dns?'Swing highs increasing':dns>ups?'Swing lows decreasing':'Mixed swings',wave:'Elliott count: manual confirmation needed'};
+}
+async function scan(){
+ $('scanBtn').disabled=true;$('status').textContent='Scanning '+market.toUpperCase()+' · '+$('tf').value+'…';$('results').innerHTML='';
+ let rows=[],errors=0;
+ for(let i=0;i<pairs.length;i+=3){
+  const batch=pairs.slice(i,i+3);
+  const got=await Promise.all(batch.map(async s=>{try{return {s,a:analyze(await candles(s))}}catch(e){errors++;return {s,error:e.message}}}));
+  rows.push(...got);
+  $('status').textContent='Scanned '+Math.min(i+3,pairs.length)+' / '+pairs.length+' pairs…';
+ }
+ rows.sort((a,b)=>(b.a?.score||-1)-(a.a?.score||-1));
+ $('scanned').textContent=rows.filter(x=>x.a).length;$('buys').textContent=rows.filter(x=>x.a?.sig==='BUY').length;$('sells').textContent=rows.filter(x=>x.a?.sig==='SELL').length;
+ $('results').innerHTML=rows.map(x=>{
+  if(!x.a)return `<article class="card"><div class="top"><span class="coin">${x.s}</span><span class="signal WAIT">DATA ERROR</span></div><div class="reason error">${x.error}</div></article>`;
+  const a=x.a;
+  return `<article class="card"><div class="top"><div><div class="coin">${x.s}</div><div class="price">${market==='spot'?'Spot':'USDT-M Perpetual'} · ${$('tf').value} · Close ${fmt(a.last.c)}</div></div><span class="signal ${a.sig}">${a.sig} · ${a.score}/?</span></div><div class="chips">${a.why.map(w=>`<span class="chip">${w}</span>`).join('')}</div><div class="reason">Range high ${fmt(a.hi)} · low ${fmt(a.lo)}<br>${a.trend}<br>${a.wave}</div></article>`
+ }).join('');
+ $('status').textContent='Updated '+new Date().toLocaleTimeString()+' · '+market.toUpperCase()+(errors?' · '+errors+' data errors':'')+'. Scan again for refresh.';
+ $('scanBtn').disabled=false;
+}
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+</script></body></html>
